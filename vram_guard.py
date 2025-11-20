@@ -8,7 +8,7 @@ import platform
 import json
 from datetime import datetime
 
-# Configure logging
+
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - [VRAM GUARD] - %(message)s',
@@ -24,12 +24,9 @@ class VRAMManager:
         self.system = platform.system()
 
     async def get_vram_usage(self) -> float:
-        """
-        Get current VRAM usage in MB using nvidia-smi.
-        Returns 0.0 if NVIDIA GPU is not detected.
-        """
+
         try:
-            # Query NVIDIA-SMI for memory usage
+          
             result = await asyncio.to_thread(
                 subprocess.run,
                 ["nvidia-smi", "--query-gpu=memory.used", "--format=csv,noheader,nounits"],
@@ -38,7 +35,7 @@ class VRAMManager:
             )
             
             if result.returncode == 0 and result.stdout.strip():
-                # Handle multiple GPUs - currently sums them up or takes the first
+           
                 lines = result.stdout.strip().splitlines()
                 total_used = sum(float(line) for line in lines)
                 return total_used
@@ -51,7 +48,7 @@ class VRAMManager:
         return 0.0
 
     async def get_loaded_models(self):
-        """Ask Ollama which models are currently loaded in memory."""
+      
         try:
             async with aiohttp.ClientSession() as session:
                 async with session.get(f"{self.ollama_url}/api/ps") as resp:
@@ -63,7 +60,7 @@ class VRAMManager:
         return []
 
     async def unload_model(self, model_name: str):
-        """Force unload a model by setting keep_alive to 0."""
+       
         if self.dry_run:
             logging.info(f"DRY RUN: Would unload {model_name}")
             return
@@ -71,7 +68,7 @@ class VRAMManager:
         logging.info(f"🧹 Unloading model: {model_name}...")
         try:
             async with aiohttp.ClientSession() as session:
-                # The 'generate' endpoint with keep_alive=0 forces immediate unload
+              
                 payload = {
                     "model": model_name,
                     "keep_alive": 0
@@ -85,7 +82,7 @@ class VRAMManager:
             logging.error(f"Error unloading model: {e}")
 
     async def monitor_loop(self):
-        """Main monitoring loop."""
+       
         logging.info(f"🛡️  VRAM Guard Active.")
         logging.info(f"   • Threshold: {self.threshold_mb} MB")
         logging.info(f"   • Check Interval: {self.interval}s")
@@ -95,22 +92,21 @@ class VRAMManager:
             try:
                 vram_used = await self.get_vram_usage()
                 
-                # If we can't read VRAM (non-Nvidia), we essentially just wait
-                if vram_used == 0.0 and self.system != "Darwin": # Darwin (Mac) handling could be added here
+                
+                if vram_used == 0.0 and self.system != "Darwin": 
                     logging.debug("VRAM reading unavailable or 0.")
                 
                 elif vram_used > self.threshold_mb:
                     logging.warning(f"⚠️  High VRAM Detected: {vram_used:.0f} MB (Threshold: {self.threshold_mb} MB)")
                     
-                    # Get loaded models
+                  
                     loaded = await self.get_loaded_models()
                     
                     if loaded:
                         logging.info(f"Found {len(loaded)} loaded models. Initiating cleanup...")
                         for model in loaded:
                             name = model.get('name')
-                            # In a more advanced version, you could check 'expires_at' 
-                            # or sort by size. For now, we clear to save the system.
+                           
                             await self.unload_model(name)
                     else:
                         logging.info("No Ollama models loaded. VRAM usage is from other applications.")
@@ -155,7 +151,7 @@ async def main():
             logging.info("No models found to unload.")
         return
 
-    # Start the background monitor
+   
     try:
         await manager.monitor_loop()
     except KeyboardInterrupt:
